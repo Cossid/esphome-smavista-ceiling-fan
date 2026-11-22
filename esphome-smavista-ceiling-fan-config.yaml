@@ -1,0 +1,108 @@
+esphome:
+  name: smavista-ceiling-fan
+  friendly_name: "Smavista Ceiling Fan"
+
+bk72xx:
+  board: generic-bk7238-tuya
+
+logger:
+ota:
+  - platform: esphome
+  - platform: web_server
+web_server:
+captive_portal:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+
+external_components:
+  - source: github://cossid/esphome-smavista-ceiling-fan@main
+    components: [ smavista_pulse_cmd_fan ]
+    refresh: 10 min
+
+# Ceiling fan control. The BK7238 talks to the fan's motor controller
+# (LKS32MC035) over one GPIO using the stock firmware's pulse-width waveform;
+# see ANALYSIS.md section 2. Speed (1-6), on/off and direction are exposed as a
+# normal fan entity.
+fan:
+  - platform: smavista_pulse_cmd_fan
+    id: ceiling_fan
+    name: "Ceiling Fan"
+    # Command line to the motor controller.
+    pin: GPIO14
+    # The stock firmware's `lowpower_onoff` output: high while the fan is on,
+    # raised ~10ms before the first command and dropped ~100ms after OFF
+    # (ANALYSIS.md section 3).
+    enable_pin: GPIO22
+    # The stock pin init also holds GPIO20 LOW as an output (purpose unknown).
+    aux_pin: GPIO20
+
+    # Optional tuning. Everything below is already the default, shown for
+    # reference.
+    # stock_waveform: true        # false = bare frames, line idles LOW
+    # trailer_blip_us: 100        # short HIGH blip after each frame's trailer
+    # short_pulse_us: 250
+    # long_pulse_us: 750
+    # frame_gap_us: 8100
+    # repeat: 6                   # copies of each frame per command
+    # inverted: false             # only for an inverting stage on the line
+    # enable_inverted: false
+    # enable_follow_fan: true     # false = hold the enable pin on from boot
+    # enable_lead_ms: 10
+    # enable_off_delay_ms: 100
+
+# Light: a tunable-white (cold/warm) PWM pair plus an addressable RGB strip.
+output:
+  - platform: libretiny_pwm
+    id: output_warm_white
+    pin: GPIO6
+  - platform: libretiny_pwm
+    id: output_cold_white
+    pin: GPIO7
+
+light:
+  # Addressable RGB strip, driven over SPI (MOSI on GPIO16).
+  - platform: beken_spi_led_strip
+    channel_colors: GRB
+    pin: GPIO16
+    num_leds: 36
+    chipset: SK6812
+    name: RGB
+    effects:
+      - addressable_rainbow:
+      - addressable_color_wipe:
+      - addressable_scan:
+      - addressable_twinkle:
+      - addressable_random_twinkle:
+      - addressable_fireworks:
+      - addressable_flicker:
+  # Tunable-white light on the two PWM outputs above.
+  - platform: cwww
+    name: CWWW
+    cold_white: output_cold_white
+    warm_white: output_warm_white
+    cold_white_color_temperature: 6500 K
+    warm_white_color_temperature: 2700 K
+
+# Manual actions for Home Assistant or automations.
+api:
+  actions:
+    # Absolute direction commands, the same ones the fan's own `direction`
+    # control uses.
+    - action: fan_direction_forward
+      then:
+        - smavista_pulse_cmd_fan.direction_forward: ceiling_fan
+    - action: fan_direction_reverse
+      then:
+        - smavista_pulse_cmd_fan.direction_reverse: ceiling_fan
+    # The remote's "wind" (natural wind) button.
+    - action: fan_wind
+      then:
+        - smavista_pulse_cmd_fan.wind: ceiling_fan
+    # Leave wind mode. Stock has no separate command: it re-sends the current
+    # speed.
+    - action: fan_wind_off
+      then:
+        - smavista_pulse_cmd_fan.wind_off: ceiling_fan
