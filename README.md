@@ -7,7 +7,8 @@ firmware's command waveform, so speed, direction and on/off work as a normal Hom
 Assistant fan. The light's cold/warm-white and RGB outputs are included.
 
 Confirmed working on the my device. The pin assignments below are for my
-board; other hardware revisions may differ.
+board; other hardware revisions may differ.  Likely works with the CINOTON
+branded ceiling fans as well.
 
 ## Features
 
